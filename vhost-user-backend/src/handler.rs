@@ -254,6 +254,7 @@ where
 
     fn set_features(&mut self, features: u64) -> VhostUserResult<()> {
         if (features & !self.backend.features()) != 0 {
+            //new error exit point
             return Err(VhostUserError::InvalidParam);
         }
 
@@ -514,6 +515,12 @@ where
         vring.set_enabled(enable);
 
         Ok(())
+    }
+
+    fn gpu_set_socket(&mut self) -> VhostUserResult<()> {
+        self.backend
+            .gpu_set_socket()
+            .map_err(VhostUserError::ReqHandlerError)
     }
 
     fn get_config(

@@ -68,6 +68,7 @@ pub trait VhostUserBackendReqHandler {
     fn get_inflight_fd(&self, inflight: &VhostUserInflight) -> Result<(VhostUserInflight, File)>;
     fn set_inflight_fd(&self, inflight: &VhostUserInflight, file: File) -> Result<()>;
     fn get_max_mem_slots(&self) -> Result<u64>;
+    fn gpu_set_socket(&self) -> Result<()>;
     fn add_mem_region(&self, region: &VhostUserSingleMemoryRegion, fd: File) -> Result<()>;
     fn remove_mem_region(&self, region: &VhostUserSingleMemoryRegion) -> Result<()>;
     fn set_device_state_fd(
@@ -129,6 +130,7 @@ pub trait VhostUserBackendReqHandlerMut {
     ) -> Result<(VhostUserInflight, File)>;
     fn set_inflight_fd(&mut self, inflight: &VhostUserInflight, file: File) -> Result<()>;
     fn get_max_mem_slots(&mut self) -> Result<u64>;
+    fn gpu_set_socket(&mut self) -> Result<()>;
     fn add_mem_region(&mut self, region: &VhostUserSingleMemoryRegion, fd: File) -> Result<()>;
     fn remove_mem_region(&mut self, region: &VhostUserSingleMemoryRegion) -> Result<()>;
     fn set_device_state_fd(
@@ -245,6 +247,9 @@ impl<T: VhostUserBackendReqHandlerMut> VhostUserBackendReqHandler for Mutex<T> {
         self.lock().unwrap().get_max_mem_slots()
     }
 
+    fn gpu_set_socket(&self) -> Result<()> {
+        self.lock().unwrap().gpu_set_socket()
+    }
     fn add_mem_region(&self, region: &VhostUserSingleMemoryRegion, fd: File) -> Result<()> {
         self.lock().unwrap().add_mem_region(region, fd)
     }
@@ -431,6 +436,7 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                 self.send_ack_message(&hdr, res)?;
             }
             Ok(FrontendReq::SET_VRING_ADDR) => {
+                println!("set vring aadr");
                 let msg = self.extract_request_body::<VhostUserVringAddr>(&hdr, size, &buf)?;
                 let flags = match VhostUserVringAddrFlags::from_bits(msg.flags) {
                     Some(val) => val,
@@ -463,6 +469,7 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                 self.send_ack_message(&hdr, res)?;
             }
             Ok(FrontendReq::SET_VRING_KICK) => {
+                println!("vring kick");
                 self.check_request_size(&hdr, size, mem::size_of::<VhostUserU64>())?;
                 let (index, file) = self.handle_vring_fd_request(&buf, files)?;
                 let res = self.backend.set_vring_kick(index, file);
@@ -475,6 +482,7 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                 self.send_ack_message(&hdr, res)?;
             }
             Ok(FrontendReq::GET_PROTOCOL_FEATURES) => {
+                println!("prot num");
                 self.check_request_size(&hdr, size, 0)?;
                 let features = self.backend.get_protocol_features()?;
 
@@ -498,6 +506,7 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                 self.check_proto_feature(VhostUserProtocolFeatures::XEN_MMAP)?;
             }
             Ok(FrontendReq::GET_QUEUE_NUM) => {
+                println!("queue num");
                 self.check_proto_feature(VhostUserProtocolFeatures::MQ)?;
                 self.check_request_size(&hdr, size, 0)?;
                 let num = self.backend.get_queue_num()?;
@@ -517,11 +526,13 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                 self.send_ack_message(&hdr, res)?;
             }
             Ok(FrontendReq::GET_CONFIG) => {
+                println!("get config");
                 self.check_proto_feature(VhostUserProtocolFeatures::CONFIG)?;
                 self.check_request_size(&hdr, size, hdr.get_size() as usize)?;
                 self.get_config(&hdr, &buf)?;
             }
             Ok(FrontendReq::SET_CONFIG) => {
+                println!("set config");
                 self.check_proto_feature(VhostUserProtocolFeatures::CONFIG)?;
                 self.check_request_size(&hdr, size, hdr.get_size() as usize)?;
                 let res = self.set_config(size, &buf);
@@ -619,6 +630,13 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                     Err(_) => VhostUserU64::new(1),
                 };
                 self.send_reply_message(&hdr, &msg)?;
+            }
+            Ok(FrontendReq::GPU_SET_SOCKET) => {
+                println!("gpu protocl called");
+                //self.check_proto_feature(VhostUserProtocolFeatures::GPU)?;
+                self.check_request_size(&hdr, size, hdr.get_size() as usize)?;
+                let res = self.backend.gpu_set_socket();
+                self.send_ack_message(&hdr, res)?;
             }
             #[cfg(feature = "postcopy")]
             Ok(FrontendReq::POSTCOPY_ADVISE) => {
@@ -842,7 +860,8 @@ impl<S: VhostUserBackendReqHandler> BackendReqHandler<S> {
                 | FrontendReq::SET_BACKEND_REQ_FD
                 | FrontendReq::SET_INFLIGHT_FD
                 | FrontendReq::ADD_MEM_REG
-                | FrontendReq::SET_DEVICE_STATE_FD,
+                | FrontendReq::SET_DEVICE_STATE_FD
+                | FrontendReq::GPU_SET_SOCKET,
             ) => Ok(()),
             _ if files.is_some() => Err(Error::InvalidMessage),
             _ => Ok(()),

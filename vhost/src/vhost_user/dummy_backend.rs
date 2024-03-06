@@ -259,6 +259,10 @@ impl VhostUserBackendReqHandlerMut for DummyBackendReqHandler {
         Ok(())
     }
 
+    fn gpu_set_socket(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     fn get_inflight_fd(
         &mut self,
         inflight: &VhostUserInflight,

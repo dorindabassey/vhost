@@ -67,6 +67,10 @@ pub trait VhostUserBackend: Send + Sync {
         Vec::new()
     }
 
+    fn gpu_set_socket(&self) -> Result<()> {
+        Ok(())
+    }
+
     /// Set virtio device configuration.
     ///
     /// A default implementation is provided as we cannot expect all backends to implement this
