@@ -78,7 +78,9 @@ impl VhostUserBackendMut for MockVhostBackend {
         Ok(())
     }
 
-    fn set_gpu_socket(&mut self, _gpu_backend: GpuBackend) {}
+    fn set_gpu_socket(&mut self, _gpu_backend: GpuBackend) -> Result<()> {
+        Ok(())
+    }
 
     fn update_memory(&mut self, atomic_mem: GuestMemoryAtomic<GuestMemoryMmap>) -> Result<()> {
         let mem = atomic_mem.memory();
