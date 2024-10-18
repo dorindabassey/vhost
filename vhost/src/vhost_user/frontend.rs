@@ -23,6 +23,12 @@ use crate::{Error, Result};
 
 /// Trait for vhost-user frontend to provide extra methods not covered by the VhostBackend yet.
 pub trait VhostUserFrontend: VhostBackend {
+    /// Retrieve a given dma-buf fd from a given back-end
+    fn get_shared_object(
+        &mut self,
+        uuid: &VhostUserSharedMsg,
+    ) -> Result<(VhostUserSharedMsg, File)>;
+
     /// Get the protocol feature bitmask from the underlying vhost implementation.
     fn get_protocol_features(&mut self) -> Result<VhostUserProtocolFeatures>;
 
@@ -471,6 +477,21 @@ impl VhostUserFrontend for Frontend {
         let fds = [fd.as_raw_fd()];
         let hdr = node.send_request_header(FrontendReq::SET_BACKEND_REQ_FD, Some(&fds))?;
         node.wait_for_ack(&hdr).map_err(|e| e.into())
+    }
+
+    fn get_shared_object(
+        &mut self,
+        uuid: &VhostUserSharedMsg,
+    ) -> Result<(VhostUserSharedMsg, File)> {
+        let mut node = self.node();
+        node.check_proto_feature(VhostUserProtocolFeatures::SHARED_OBJECT)?;
+        let hdr = node.send_request_with_body(FrontendReq::GET_SHARED_OBJECT, uuid, None)?;
+        let (shared_buf, files) = node.recv_reply_with_files::<VhostUserSharedMsg>(&hdr)?;
+
+        match take_single_file(files) {
+            Some(file) => Ok((shared_buf, file)),
+            None => error_code(VhostUserError::IncorrectFds),
+        }
     }
 
     fn get_inflight_fd(
