@@ -570,6 +570,7 @@ pub mod tests {
     use crate::VringRwLock;
     use libc::EFD_NONBLOCK;
     use std::sync::Mutex;
+    use uuid::Uuid;
     use vm_memory::{GuestAddress, GuestMemoryAtomic, GuestMemoryMmap};
 
     pub struct MockVhostBackend {
@@ -648,6 +649,10 @@ pub mod tests {
 
         fn set_backend_req_fd(&mut self, _backend: Backend) {}
 
+        fn get_shared_object(&mut self, _uuid: VhostUserSharedMsg) -> Result<Option<OwnedFd>> {
+            Ok(None)
+        }
+
         #[cfg(feature = "gpu-socket")]
         fn set_gpu_socket(&mut self, _gpu_backend: GpuBackend) {}
 
@@ -701,6 +706,11 @@ pub mod tests {
 
         let _ = backend.exit_event(0).unwrap();
 
+        let uuid = VhostUserSharedMsg {
+            uuid: Uuid::new_v4(),
+        };
+        backend.get_shared_object(uuid).unwrap();
+
         let mem = GuestMemoryAtomic::new(
             GuestMemoryMmap::<()>::from_ranges(&[(GuestAddress(0x100000), 0x10000)]).unwrap(),
         );
@@ -735,6 +745,11 @@ pub mod tests {
             GuestMemoryMmap::<()>::from_ranges(&[(GuestAddress(0x100000), 0x10000)]).unwrap(),
         );
         backend.update_memory(mem.clone()).unwrap();
+
+        let uuid = VhostUserSharedMsg {
+            uuid: Uuid::new_v4(),
+        };
+        backend.get_shared_object(uuid).unwrap();
 
         let vring = VringRwLock::new(mem, 0x1000).unwrap();
         backend
